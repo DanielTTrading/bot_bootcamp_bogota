@@ -1,0 +1,7 @@
+venv/
+.env
+__pycache__/
+*.pyc
+
+# Ignora la carpeta de datos completa (por ahora)
+
