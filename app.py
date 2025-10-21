@@ -26,7 +26,6 @@ from telegram.ext import (
     MessageHandler,
     CallbackQueryHandler,
     ContextTypes,
-    ConversationHandler,
     filters,
 )
 
@@ -394,8 +393,84 @@ async def menu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
+# --- BROADCAST por bandera en user_data ---
+async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await upsert_user_seen(query.from_user)
+    uid = query.from_user.id
+    if uid not in ADMINS:
+        await query.answer("Solo para administradores.", show_alert=True)
+        return
+    context.user_data["bcast"] = True
+    await query.edit_message_text(
+        "📣 *Envío masivo*\n\nEnvía ahora el mensaje que deseas reenviar a TODOS "
+        "los usuarios **validados** (texto, foto, video o documento).\n\n"
+        "Escribe /cancel para cancelar.",
+        parse_mode="Markdown"
+    )
+
+async def broadcast_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await upsert_user_seen(update.effective_user)
+    uid = update.effective_user.id
+    if uid not in ADMINS:
+        await update.message.reply_text("🚫 Este comando es solo para administradores.")
+        return
+    context.user_data["bcast"] = True
+    await update.message.reply_text(
+        "📣 *Envío masivo*\n\nEnvía ahora el mensaje que deseas reenviar a TODOS "
+        "los usuarios **validados** (texto, foto, video o documento).\n\n"
+        "Escribe /cancel para cancelar.",
+        parse_mode="Markdown"
+    )
+
+async def broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("bcast", None)
+    await update.message.reply_text("Operación cancelada.")
+    await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
+
+async def intentar_broadcast_si_corresponde(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Si el usuario es admin y está en modo broadcast, reenvía y retorna True (manejado)."""
+    uid = update.effective_user.id if update.effective_user else 0
+    if uid not in ADMINS:
+        return False
+    if not context.user_data.get("bcast"):
+        return False
+
+    # salimos del modo broadcast
+    context.user_data["bcast"] = False
+
+    targets = await fetch_broadcast_user_ids()
+    if not targets:
+        await update.message.reply_text("⚠️ Aún no hay usuarios validados en la base de datos.")
+        await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
+        return True
+
+    ok, fail = 0, 0
+    for tid in targets:
+        try:
+            await context.bot.copy_message(
+                chat_id=tid,
+                from_chat_id=update.effective_chat.id,
+                message_id=update.message.message_id
+            )
+            ok += 1
+        except Exception:
+            fail += 1
+        await asyncio.sleep(0.03)
+
+    await update.message.reply_text(f"✅ Enviado a {ok} usuarios. ❌ Fallidos: {fail}")
+    await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
+    return True
+
 async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
+
+    # 1) Si admin está en modo broadcast, se maneja aquí y termina
+    if await intentar_broadcast_si_corresponde(update, context):
+        return
+
+    # 2) Normal
     en_pre, msg = esta_en_prelanzamiento()
     if en_pre:
         await update.message.reply_text(msg)
@@ -421,7 +496,7 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Estás autenticado. Usa el menú:", reply_markup=principal_inline())
         return
 
-    # Validar contra base local (JSON/embebida)
+    # Validación contra base local (JSON/embebida)
     clave = normaliza(texto)
     if not clave:
         await update.message.reply_text("❗ Por favor escribe tu **cédula** o **correo**.")
@@ -453,78 +528,6 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
-# ======= BROADCAST (solo admins / destinatarios desde Postgres)
-BROADCAST_WAITING = 1
-
-async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await upsert_user_seen(query.from_user)
-
-    uid = query.from_user.id
-    if uid not in ADMINS:
-        await query.answer("Solo para administradores.", show_alert=True)
-        return ConversationHandler.END
-
-    await query.edit_message_text(
-        "📣 *Envío masivo*\n\n"
-        "Envía ahora el mensaje que deseas reenviar a TODOS los usuarios **validados** "
-        "(texto, foto, video o documento). Escribe /cancel para cancelar.",
-        parse_mode="Markdown"
-    )
-    return BROADCAST_WAITING
-
-async def broadcast_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await upsert_user_seen(update.effective_user)
-    uid = update.effective_user.id
-    if uid not in ADMINS:
-        await update.message.reply_text("🚫 Este comando es solo para administradores.")
-        return ConversationHandler.END
-
-    await update.message.reply_text(
-        "📣 *Envío masivo*\n\n"
-        "Envía ahora el mensaje que deseas reenviar a TODOS los usuarios **validados** "
-        "(texto, foto, video o documento). Escribe /cancel para cancelar.",
-        parse_mode="Markdown"
-    )
-    return BROADCAST_WAITING
-
-async def broadcast_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("[broadcast] mensaje recibido en estado BROADCAST_WAITING")
-    await upsert_user_seen(update.effective_user)
-    uid = update.effective_user.id
-    if uid not in ADMINS:
-        return ConversationHandler.END
-
-    targets = await fetch_broadcast_user_ids()
-    if not targets:
-        await update.message.reply_text("⚠️ Aún no hay usuarios validados en la base de datos.")
-        await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
-        return ConversationHandler.END
-
-    ok, fail = 0, 0
-    for tid in targets:
-        try:
-            await context.bot.copy_message(
-                chat_id=tid,
-                from_chat_id=update.effective_chat.id,
-                message_id=update.message.message_id
-            )
-            ok += 1
-        except Exception:
-            fail += 1
-        await asyncio.sleep(0.05)
-
-    await update.message.reply_text(f"✅ Enviado a {ok} usuarios. ❌ Fallidos: {fail}")
-    await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
-    return ConversationHandler.END
-
-async def broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await upsert_user_seen(update.effective_user)
-    await update.message.reply_text("Operación cancelada.")
-    await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
-    return ConversationHandler.END
-
 # =========================
 # CALLBACKS MENÚ
 # =========================
@@ -555,6 +558,11 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       parse_mode="Markdown")
         return
 
+    if data == "admin_broadcast":
+        # lo maneja broadcast_start_cb; este fallback es por si llega aquí
+        await broadcast_start_cb(update, context)
+        return
+
     if data == "menu_exness":
         texto = (
             "💳 *Apertura de cuenta y Copy Trading*\n\n"
@@ -579,34 +587,19 @@ def build_app() -> Application:
 
     app = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
 
-    # ---- Conversación de broadcast (grupo 0) ----
-    app.add_handler(
-        ConversationHandler(
-            entry_points=[
-                CallbackQueryHandler(broadcast_start_cb, pattern="^admin_broadcast$"),
-                CommandHandler("broadcast", broadcast_start_cmd),
-            ],
-            states={
-                BROADCAST_WAITING: [
-                    # BLOQUEA para que no pase al handler general
-                    MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_receive, block=True)
-                ]
-            },
-            fallbacks=[CommandHandler("cancel", broadcast_cancel)],
-            allow_reentry=True,
-            per_message=True,   # necesario si el entrypoint es callback
-        ),
-        group=0,
-    )
+    # Handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("menu", menu_cmd))
+    app.add_handler(CommandHandler("miid", miid_cmd))
 
-    # ---- Handlers normales (grupo 1) ----
-    app.add_handler(CommandHandler("start", start), group=1)
-    app.add_handler(CommandHandler("help", help_cmd), group=1)
-    app.add_handler(CommandHandler("menu", menu_cmd), group=1)
-    app.add_handler(CommandHandler("miid", miid_cmd), group=1)
+    # Broadcast simple por bandera
+    app.add_handler(CommandHandler("broadcast", broadcast_start_cmd))
+    app.add_handler(CommandHandler("cancel", broadcast_cancel))
+    app.add_handler(CallbackQueryHandler(broadcast_start_cb, pattern="^admin_broadcast$"))
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ingreso_o_menu), group=1)
-    app.add_handler(CallbackQueryHandler(menu_callbacks), group=1)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ingreso_o_menu))
+    app.add_handler(CallbackQueryHandler(menu_callbacks))
 
     return app
 
