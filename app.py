@@ -2,11 +2,11 @@ import os
 import json
 import asyncio
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
-from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict, Tuple, Optional
 
+from dotenv import load_dotenv
 from psycopg_pool import AsyncConnectionPool
 
 from telegram import (
@@ -19,7 +19,6 @@ from telegram import (
     ReplyKeyboardRemove,
 )
 from telegram.constants import ChatAction
-    # PTB v22.x mantiene ChatAction; en v21+ se usa telegram.constants
 from telegram.error import TimedOut, NetworkError
 from telegram.ext import (
     Application,
@@ -31,9 +30,14 @@ from telegram.ext import (
     filters,
 )
 
+# =========================
+# CARGA .ENV
+# =========================
 load_dotenv()
 
-# ========= CONFIG =========
+# =========================
+# CONFIG
+# =========================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"
 PORT = int(os.getenv("PORT", "8080"))
@@ -44,25 +48,95 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}" if WEBHOOK_HOST else ""
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_POOL: AsyncConnectionPool | None = None
 
+# --- PRE-LANZAMIENTO ---
 LAUNCH_DATE_STR = os.getenv("LAUNCH_DATE", "")
 PRELAUNCH_DAYS = int(os.getenv("PRELAUNCH_DAYS", "2"))
 PRELAUNCH_MESSAGE = os.getenv(
     "PRELAUNCH_MESSAGE",
-    "✨ El bot estará disponible 🔥 el día del evento. ⏳ Vuelve pronto y usa /start para comenzar. 🙌"
+    "✨ El bot estará disponible 🔥 el día del evento. "
+    "⏳ Vuelve pronto y usa /start para comenzar. 🙌"
 )
 
+# --- WIFI ---
 WIFI_SSID = os.getenv("WIFI_SSID", "NombreDeRed")
+WIFI_PASS = os.getenv("WIFI_PASS", "Contrasena123")  # sólo si la usas en pantalla
 
-# Admins (déjalos tal cual y/o ajusta)
+# --- ADMINS (agregado 7724870185) ---
 ADMINS: set[int] = {
     7710920544,
     7560374352,
     7837963996,
     8465613365,
-    7724870185,
+    7724870185,  # ← NUEVO ADMIN
 }
 
-# ========= TEXTOS =========
+# =========================
+# TEXTOS Y RECURSOS
+# =========================
+NOMBRE_EVENTO = "Bootcamp 2025 - 2 de JP Tactical Trading"
+
+BIENVENIDA = (
+    f"🎉 ¡Bienvenido/a al {NOMBRE_EVENTO}! 🎉\n\n"
+    "Has sido validado correctamente.\n"
+    "Usa el menú para navegar."
+)
+
+ALERTA_CONEXION = (
+    "⚠️ **Aviso importante**:\n"
+    "Si durante la conexión se detecta una persona **no registrada**, será **expulsada**.\n"
+    "Por favor, no compartas estos accesos."
+)
+
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+AGENDA_PDF = DATA_DIR / "agenda.pdf"
+DOCS_DIR = DATA_DIR / "docs"
+VIDEOS_DIR = DATA_DIR / "videos"
+
+UBICACION_URL = "https://maps.app.goo.gl/zZfR7kPo9ZR1AUtu9"
+EXNESS_ACCOUNT_URL = "https://one.exnesstrack.org/a/s3wj0b5qry"
+EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
+
+# =========================
+# BASE LOCAL (JSON)
+# =========================
+USUARIOS_JSON = DATA_DIR / "usuarios.json"
+
+# Si prefieres mantener el diccionario en código, puedes dejarlo aquí.
+# Si existe data/usuarios.json, se usará ese archivo y este bloque queda ignorado.
+USUARIOS_EMBEBIDOS: Dict[str, str] = {
+    # "cedula_o_correo": "Nombre Apellido",
+    "75106729": "Daniel Mejia sanchez",
+    "furolol@gmail.com": "Daniel Mejia sanchez",
+    # ... (puedes pegar toda tu base aquí o usar data/usuarios.json)
+}
+
+def es_correo(s: str) -> bool:
+    return "@" in s
+
+def es_cedula(s: str) -> bool:
+    s2 = s.replace(".", "").replace(" ", "")
+    return s2.isdigit()
+
+def normaliza(s: str) -> str:
+    return (s or "").strip().lower()
+
+def cargar_base_local() -> Dict[str, str]:
+    """
+    Carga usuarios desde data/usuarios.json (si existe). Si no, usa USUARIOS_EMBEBIDOS.
+    Claves y valores en minúscula para comparación robusta.
+    """
+    if USUARIOS_JSON.exists():
+        try:
+            raw = json.loads(USUARIOS_JSON.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return {normaliza(k): v for k, v in raw.items()}
+        except Exception:
+            pass
+    return {normaliza(k): v for k, v in USUARIOS_EMBEBIDOS.items()}
+
+BASE_LOCAL = cargar_base_local()
+
 def parse_fecha(date_str: str):
     try:
         y, m, d = map(int, date_str.split("-"))
@@ -89,54 +163,148 @@ def esta_en_prelanzamiento() -> tuple[bool, str]:
         return (True, msg)
     return (False, "")
 
-NOMBRE_EVENTO = "Bootcamp 2025 - 2 de JP Tactical Trading"
-BIENVENIDA = (
-    f"🎉 ¡Bienvenido/a al {NOMBRE_EVENTO}! 🎉\n\n"
-    "Has sido validado correctamente.\n"
-    "Usa el menú para navegar."
-)
+# =========================
+# MENÚS / UI
+# =========================
+def principal_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📚 Material de apoyo", callback_data="menu_material")],
+        [InlineKeyboardButton("🔗 Enlaces y Conexión", callback_data="menu_enlaces")],
+        [InlineKeyboardButton("💳 Exness & Copy", callback_data="menu_exness")],
+        [InlineKeyboardButton("📣 Enviar mensaje (Admin)", callback_data="admin_broadcast")],
+    ])
 
-DATA_DIR = Path(__file__).parent / "data"
-AGENDA_PDF = DATA_DIR / "agenda.pdf"
-DOCS_DIR = DATA_DIR / "docs"
-VIDEOS_DIR = DATA_DIR / "videos"
+def enlaces_inline_general() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📍 Abrir ubicación", url=UBICACION_URL)],
+        [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
+    ])
 
-UBICACION_URL = "https://maps.app.goo.gl/zZfR7kPo9ZR1AUtu9"
-EXNESS_ACCOUNT_URL = "https://one.exnesstrack.org/a/s3wj0b5qry"
-EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
+def exness_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Crear cuenta en Exness", url=EXNESS_ACCOUNT_URL)],
+        [InlineKeyboardButton("🤝 Conectar al Copy JP TACTICAL", url=EXNESS_COPY_URL)],
+        [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
+    ])
 
-# ========= BASE LOCAL (JSON) =========
-USUARIOS_JSON = DATA_DIR / "usuarios.json"
+BTN_CERRAR = "❌ Cerrar menú"
+BTN_AGENDA = "📅 Agenda"  # si lo usas
+BTN_ENLACES = "🔗 Enlaces y Conexión"
 
-def es_correo(s: str) -> bool:
-    return "@" in s
+def bottom_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(BTN_ENLACES)],
+            [KeyboardButton(BTN_CERRAR)],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
-def es_cedula(s: str) -> bool:
-    s2 = s.replace(".", "").replace(" ", "")
-    return s2.isdigit()
+# =========================
+# AUTH (RAM)
+# =========================
+@dataclass
+class PerfilUsuario:
+    nombre: str
+    autenticado: bool = False
 
-def normaliza(s: str) -> str:
-    return (s or "").strip().lower()
+PERFILES: Dict[int, PerfilUsuario] = {}
 
-def cargar_base_local() -> Dict[str, str]:
-    if not USUARIOS_JSON.exists():
-        return {}
-    try:
-        raw = json.loads(USUARIOS_JSON.read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            # normaliza claves
-            return {normaliza(k): v for k, v in raw.items()}
-    except Exception:
-        pass
-    return {}
+async def ensure_auth(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Tuple[bool, int]:
+    user_id = update.effective_user.id if update.effective_user else 0
+    perfil = PERFILES.get(user_id)
+    return (perfil is not None and perfil.autenticado), user_id
 
-BASE_LOCAL = cargar_base_local()
+# =========================
+# DB (PostgreSQL)
+# =========================
+async def get_db_pool() -> AsyncConnectionPool:
+    """Crea/retorna el pool async de Postgres."""
+    global DB_POOL
+    if DB_POOL is None:
+        if not DATABASE_URL:
+            raise RuntimeError("Falta DATABASE_URL para conectarse a PostgreSQL.")
+        DB_POOL = AsyncConnectionPool(DATABASE_URL, min_size=1, max_size=5)
+        await DB_POOL.open()  # abrir explícitamente para evitar warnings
+    return DB_POOL
 
+async def init_db():
+    pool = await get_db_pool()
+    async with pool.connection() as aconn:
+        async with aconn.cursor() as cur:
+            await cur.execute("""
+            CREATE TABLE IF NOT EXISTS subscribed_users (
+                user_id         BIGINT PRIMARY KEY,
+                first_name      TEXT,
+                last_name       TEXT,
+                username        TEXT,
+                language        TEXT,
+                nombre          TEXT,
+                cedula          TEXT,
+                correo          TEXT,
+                credential_used TEXT,
+                first_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                last_seen       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """)
+            await cur.execute("CREATE INDEX IF NOT EXISTS idx_subscribed_users_correo ON subscribed_users (correo);")
+            await cur.execute("CREATE INDEX IF NOT EXISTS idx_subscribed_users_cedula ON subscribed_users (cedula);")
+
+async def upsert_user_seen(u) -> None:
+    if not u:
+        return
+    pool = await get_db_pool()
+    async with pool.connection() as aconn:
+        async with aconn.cursor() as cur:
+            await cur.execute("""
+                INSERT INTO subscribed_users (user_id, first_name, last_name, username, language, first_seen, last_seen)
+                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+                ON CONFLICT (user_id) DO UPDATE
+                   SET first_name = EXCLUDED.first_name,
+                       last_name  = EXCLUDED.last_name,
+                       username   = EXCLUDED.username,
+                       language   = EXCLUDED.language,
+                       last_seen  = NOW();
+            """, (u.id, getattr(u, "first_name", None), getattr(u, "last_name", None),
+                  getattr(u, "username", None), getattr(u, "language_code", None)))
+
+async def persistir_validacion(user_id: int, nombre: str,
+                               cedula: Optional[str], correo: Optional[str],
+                               credential_used: str) -> None:
+    pool = await get_db_pool()
+    async with pool.connection() as aconn:
+        async with aconn.cursor() as cur:
+            await cur.execute("""
+                INSERT INTO subscribed_users (user_id, nombre, cedula, correo, credential_used, last_seen)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (user_id) DO UPDATE
+                   SET nombre = EXCLUDED.nombre,
+                       cedula = COALESCE(EXCLUDED.cedula, subscribed_users.cedula),
+                       correo = COALESCE(EXCLUDED.correo, subscribed_users.correo),
+                       credential_used = EXCLUDED.credential_used,
+                       last_seen = NOW();
+            """, (user_id, nombre, cedula, correo, credential_used))
+
+async def fetch_broadcast_user_ids() -> list[int]:
+    """
+    Devuelve los user_id de todos los usuarios validados (nombre no nulo).
+    """
+    pool = await get_db_pool()
+    async with pool.connection() as aconn:
+        async with aconn.cursor() as cur:
+            await cur.execute("SELECT user_id FROM subscribed_users WHERE nombre IS NOT NULL;")
+            rows = await cur.fetchall()
+    return [r[0] for r in rows]
+
+# =========================
+# HELPERS
+# =========================
 def buscar_en_base(clave: str) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
     """
     Recibe cédula o correo. Si existe en BASE_LOCAL:
-    - obtiene el nombre
-    - busca (en el mismo nombre) su cédula y correo (si están)
+      - obtiene el nombre
+      - busca (para ese nombre) su cédula y correo (si están)
     Devuelve: (nombre, cedula, correo) o None si no existe.
     """
     c = normaliza(clave)
@@ -156,131 +324,8 @@ def buscar_en_base(clave: str) -> Optional[Tuple[str, Optional[str], Optional[st
             correo_detectado = k
         if cedula_detectada and correo_detectado:
             break
-
     return (nombre, cedula_detectada, correo_detectado)
 
-# ========= MENÚS =========
-def principal_inline() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Enlaces y Conexión", callback_data="menu_enlaces")],
-        [InlineKeyboardButton("💳 Exness & Copy", callback_data="menu_exness")],
-        [InlineKeyboardButton("📣 Enviar mensaje (Admin)", callback_data="admin_broadcast")],
-    ])
-
-BTN_CERRAR = "❌ Cerrar menú"
-def bottom_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(BTN_CERRAR)]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-
-def enlaces_inline_general() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📍 Abrir ubicación", url=UBICACION_URL)],
-        [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
-    ])
-
-def exness_inline() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Crear cuenta en Exness", url=EXNESS_ACCOUNT_URL)],
-        [InlineKeyboardButton("🤝 Conectar al Copy JP TACTICAL", url=EXNESS_COPY_URL)],
-        [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
-    ])
-
-# ========= DB (Postgres con psycopg async) =========
-async def get_db_pool() -> AsyncConnectionPool:
-    global DB_POOL
-    if DB_POOL is None:
-        if not DATABASE_URL:
-            raise RuntimeError("Falta DATABASE_URL para conectarse a PostgreSQL.")
-        # Crea y abre el pool async
-        DB_POOL = AsyncConnectionPool(DATABASE_URL, min_size=1, max_size=5, open=True)
-    return DB_POOL
-
-async def init_db():
-    pool = await get_db_pool()
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("""
-            CREATE TABLE IF NOT EXISTS subscribed_users (
-                user_id         BIGINT PRIMARY KEY,
-                first_name      TEXT,
-                last_name       TEXT,
-                username        TEXT,
-                language        TEXT,
-                nombre          TEXT,     -- nombre de tu base (validado)
-                cedula          TEXT,
-                correo          TEXT,
-                credential_used TEXT,     -- lo que digitó (cédula/correo)
-                first_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                last_seen       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """)
-            await cur.execute("CREATE INDEX IF NOT EXISTS idx_subscribed_users_correo ON subscribed_users (correo);")
-            await cur.execute("CREATE INDEX IF NOT EXISTS idx_subscribed_users_cedula ON subscribed_users (cedula);")
-
-async def upsert_user_seen(u) -> None:
-    if not u:
-        return
-    pool = await get_db_pool()
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("""
-                INSERT INTO subscribed_users (user_id, first_name, last_name, username, language, first_seen, last_seen)
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-                ON CONFLICT (user_id) DO UPDATE
-                   SET first_name = EXCLUDED.first_name,
-                       last_name  = EXCLUDED.last_name,
-                       username   = EXCLUDED.username,
-                       language   = EXCLUDED.language,
-                       last_seen  = NOW();
-            """, (
-                u.id,
-                getattr(u, "first_name", None),
-                getattr(u, "last_name", None),
-                getattr(u, "username", None),
-                getattr(u, "language_code", None),
-            ))
-
-async def persistir_validacion(user_id: int, nombre: str, cedula: Optional[str],
-                               correo: Optional[str], credential_used: str) -> None:
-    pool = await get_db_pool()
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("""
-                INSERT INTO subscribed_users (user_id, nombre, cedula, correo, credential_used, first_seen, last_seen)
-                VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-                ON CONFLICT (user_id) DO UPDATE
-                   SET nombre = EXCLUDED.nombre,
-                       cedula = COALESCE(EXCLUDED.cedula, subscribed_users.cedula),
-                       correo = COALESCE(EXCLUDED.correo, subscribed_users.correo),
-                       credential_used = EXCLUDED.credential_used,
-                       last_seen = NOW();
-            """, (user_id, nombre, cedula, correo, credential_used))
-
-async def fetch_broadcast_user_ids() -> list[int]:
-    pool = await get_db_pool()
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("SELECT user_id FROM subscribed_users WHERE nombre IS NOT NULL;")
-            rows = await cur.fetchall()
-    return [r[0] for r in rows]
-
-# ========= AUTH RAM =========
-@dataclass
-class PerfilUsuario:
-    nombre: str
-    autenticado: bool = False
-
-PERFILES: Dict[int, PerfilUsuario] = {}
-
-async def ensure_auth(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Tuple[bool, int]:
-    user_id = update.effective_user.id if update.effective_user else 0
-    perfil = PERFILES.get(user_id)
-    return (perfil is not None and perfil.autenticado), user_id
-
-# ========= HELPERS =========
 async def envia_documento(upd_or_q, context: ContextTypes.DEFAULT_TYPE, ruta: Path, nombre_mostrar: str):
     if isinstance(upd_or_q, Update):
         chat = upd_or_q.effective_chat
@@ -330,7 +375,9 @@ async def envia_documento(upd_or_q, context: ContextTypes.DEFAULT_TYPE, ruta: Pa
             await aviso.edit_text(f"❌ Error al enviar el archivo: {e}")
             return
 
-# ========= HANDLERS =========
+# =========================
+# HANDLERS BÁSICOS
+# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
 
@@ -353,7 +400,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/help - Ayuda\n"
         "/broadcast - (admins) iniciar envío masivo\n"
         "/cancel - cancelar envío masivo\n"
-        "/miid - ver tu ID\n"
+        "/miid - ver tu ID de Telegram\n"
     )
 
 async def miid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -365,9 +412,8 @@ async def miid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🆔 *Tu información de Telegram*\n"
         f"• ID: `{uid}`\n"
         f"• Username: {un}\n\n"
-        "Escribe tu *cédula* o *correo* registrados para validar acceso.",
-        parse_mode="Markdown",
-        reply_markup=bottom_keyboard()
+        "Si eres admin, asegúrate de que tu ID esté en la lista ADMINS.",
+        parse_mode="Markdown"
     )
 
 async def menu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -390,14 +436,23 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     texto = (update.message.text or "").strip()
 
     if autenticado:
+        if texto == BTN_ENLACES:
+            await update.message.reply_text(
+                "🔗 *Enlaces y Conexión*",
+                reply_markup=enlaces_inline_general(),
+                parse_mode="Markdown",
+            )
+            return
         if texto == BTN_CERRAR:
-            await update.message.reply_text("Menú ocultado. Usa /menu para mostrarlo de nuevo.",
-                                            reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_text(
+                "Menú ocultado. Usa /menu para volver a mostrarlo.",
+                reply_markup=ReplyKeyboardRemove()
+            )
             return
         await update.message.reply_text("Estás autenticado. Usa el menú:", reply_markup=principal_inline())
         return
 
-    # Validar credencial contra JSON
+    # No autenticado -> validar credencial en base local (JSON/embebida)
     clave = normaliza(texto)
     if not clave:
         await update.message.reply_text("❗ Por favor escribe tu **cédula** o **correo**.")
@@ -429,13 +484,13 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
-# ========= ADMIN BROADCAST =========
+# =========================
+# ADMIN BROADCAST
+# =========================
 BROADCAST_WAITING = 1
 
-async def get_broadcast_targets_async() -> list[int]:
-    return await fetch_broadcast_user_ids()  # solo validados
-
 async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Entrypoint por botón inline."""
     query = update.callback_query
     await query.answer()
     await upsert_user_seen(query.from_user)
@@ -446,14 +501,15 @@ async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     await query.edit_message_text(
-        "📣 *Envío masivo*\n\nEnvía ahora el mensaje que deseas reenviar a TODOS "
-        "los usuarios validados (texto, foto, video o documento). "
-        "Escribe /cancel para cancelar.",
+        "📣 *Envío masivo*\n\n"
+        "Envía ahora el mensaje que deseas reenviar a TODOS los usuarios **validados** "
+        "(texto, foto, video o documento). Escribe /cancel para cancelar.",
         parse_mode="Markdown"
     )
     return BROADCAST_WAITING
 
 async def broadcast_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Entrypoint por comando /broadcast."""
     await upsert_user_seen(update.effective_user)
     uid = update.effective_user.id
     if uid not in ADMINS:
@@ -461,22 +517,25 @@ async def broadcast_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
 
     await update.message.reply_text(
-        "📣 *Envío masivo*\n\nEnvía ahora el mensaje que deseas reenviar a TODOS "
-        "los usuarios validados (texto, foto, video o documento). "
-        "Escribe /cancel para cancelar.",
+        "📣 *Envío masivo*\n\n"
+        "Envía ahora el mensaje que deseas reenviar a TODOS los usuarios **validados** "
+        "(texto, foto, video o documento). Escribe /cancel para cancelar.",
         parse_mode="Markdown"
     )
     return BROADCAST_WAITING
 
 async def broadcast_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Copia el mensaje del admin a cada destinatario validado en Postgres."""
     await upsert_user_seen(update.effective_user)
     uid = update.effective_user.id
     if uid not in ADMINS:
         return ConversationHandler.END
 
-    targets = await get_broadcast_targets_async()
+    targets = await fetch_broadcast_user_ids()
     if not targets:
-        await update.message.reply_text("⚠️ Aún no hay usuarios validados.")
+        await update.message.reply_text(
+            "⚠️ Aún no hay usuarios validados en la base de datos."
+        )
         await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
         return ConversationHandler.END
 
@@ -503,11 +562,18 @@ async def broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
     return ConversationHandler.END
 
-# ========= CALLBACKS MÍNIMOS =========
+# =========================
+# CALLBACKS MENÚ
+# =========================
 async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await upsert_user_seen(query.from_user)
+
+    en_pre, msg = esta_en_prelanzamiento()
+    if en_pre:
+        await query.message.reply_text(msg)
+        return
 
     autenticado, _ = await ensure_auth(update, context)
     if not autenticado:
@@ -515,14 +581,17 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data = query.data
+
     if data == "volver_menu_principal":
         await query.edit_message_text("Menú principal:", reply_markup=principal_inline())
         return
+
     if data == "menu_enlaces":
         await query.edit_message_text("🔗 *Enlaces y Conexión*",
                                       reply_markup=enlaces_inline_general(),
                                       parse_mode="Markdown")
         return
+
     if data == "menu_exness":
         texto = (
             "💳 *Apertura de cuenta y Copy Trading*\n\n"
@@ -533,44 +602,49 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=exness_inline())
         return
 
-# ========= ARRANQUE =========
+# =========================
+# ARRANQUE
+# =========================
 def build_app() -> Application:
     if not BOT_TOKEN:
         raise RuntimeError("Falta la variable de entorno BOT_TOKEN.")
 
     async def _post_init(app: Application):
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        # Crear tablas y recargar base local por si actualizas usuarios.json
         await init_db()
-        # Forzamos recarga de la base por si actualizas el JSON en despliegues
         global BASE_LOCAL
         BASE_LOCAL = cargar_base_local()
 
     app = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
 
+    # Conversación de broadcast (antes del CallbackQueryHandler general)
     app.add_handler(ConversationHandler(
         entry_points=[
             CallbackQueryHandler(broadcast_start_cb, pattern="^admin_broadcast$"),
             CommandHandler("broadcast", broadcast_start_cmd),
         ],
-        states={1: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_receive)]},
+        states={BROADCAST_WAITING: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_receive)]},
         fallbacks=[CommandHandler("cancel", broadcast_cancel)],
         allow_reentry=True,
+        per_message=True,  # ← clave para flujos iniciados por callback
     ))
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("menu", menu_cmd))
     app.add_handler(CommandHandler("miid", miid_cmd))
-    app.add_handler(CommandHandler("userinfo", miid_cmd))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ingreso_o_menu))
     app.add_handler(CallbackQueryHandler(menu_callbacks))
 
     return app
 
+
 if __name__ == "__main__":
     application = build_app()
+
     if USE_WEBHOOK and WEBHOOK_URL:
+        # Asegúrate que WEBHOOK_HOST tenga https://
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
@@ -578,5 +652,5 @@ if __name__ == "__main__":
             webhook_url=WEBHOOK_URL,
         )
     else:
-        print("Iniciando en modo polling. Establece USE_WEBHOOK=true y WEBHOOK_HOST para producción.")
+        print("Iniciando en modo polling. Establece USE_WEBHOOK=true y WEBHOOK_HOST=https://<...> para producción.")
         application.run_polling(drop_pending_updates=True)
