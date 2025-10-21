@@ -31,13 +31,10 @@ from telegram.ext import (
 )
 
 # =========================
-# CARGA .ENV
+# ENV / CONFIG
 # =========================
 load_dotenv()
 
-# =========================
-# CONFIG
-# =========================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"
 PORT = int(os.getenv("PORT", "8080"))
@@ -48,7 +45,6 @@ WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}" if WEBHOOK_HOST else ""
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 DB_POOL: AsyncConnectionPool | None = None
 
-# --- PRE-LANZAMIENTO ---
 LAUNCH_DATE_STR = os.getenv("LAUNCH_DATE", "")
 PRELAUNCH_DAYS = int(os.getenv("PRELAUNCH_DAYS", "2"))
 PRELAUNCH_MESSAGE = os.getenv(
@@ -57,30 +53,26 @@ PRELAUNCH_MESSAGE = os.getenv(
     "⏳ Vuelve pronto y usa /start para comenzar. 🙌"
 )
 
-# --- WIFI ---
 WIFI_SSID = os.getenv("WIFI_SSID", "NombreDeRed")
-WIFI_PASS = os.getenv("WIFI_PASS", "Contrasena123")  # sólo si la usas en pantalla
 
-# --- ADMINS (agregado 7724870185) ---
+# --- ADMINS (incluye el nuevo 7724870185) ---
 ADMINS: set[int] = {
     7710920544,
     7560374352,
     7837963996,
     8465613365,
-    7724870185,  # ← NUEVO ADMIN
+    7724870185,  # NUEVO
 }
 
 # =========================
-# TEXTOS Y RECURSOS
+# TEXTOS / RECURSOS
 # =========================
 NOMBRE_EVENTO = "Bootcamp 2025 - 2 de JP Tactical Trading"
-
 BIENVENIDA = (
     f"🎉 ¡Bienvenido/a al {NOMBRE_EVENTO}! 🎉\n\n"
     "Has sido validado correctamente.\n"
     "Usa el menú para navegar."
 )
-
 ALERTA_CONEXION = (
     "⚠️ **Aviso importante**:\n"
     "Si durante la conexión se detecta una persona **no registrada**, será **expulsada**.\n"
@@ -98,17 +90,14 @@ EXNESS_ACCOUNT_URL = "https://one.exnesstrack.org/a/s3wj0b5qry"
 EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
 
 # =========================
-# BASE LOCAL (JSON)
+# BASE LOCAL (JSON o embebida)
 # =========================
 USUARIOS_JSON = DATA_DIR / "usuarios.json"
-
-# Si prefieres mantener el diccionario en código, puedes dejarlo aquí.
-# Si existe data/usuarios.json, se usará ese archivo y este bloque queda ignorado.
 USUARIOS_EMBEBIDOS: Dict[str, str] = {
     # "cedula_o_correo": "Nombre Apellido",
     "75106729": "Daniel Mejia sanchez",
     "furolol@gmail.com": "Daniel Mejia sanchez",
-    # ... (puedes pegar toda tu base aquí o usar data/usuarios.json)
+    # ... añade aquí o usa data/usuarios.json
 }
 
 def es_correo(s: str) -> bool:
@@ -122,10 +111,6 @@ def normaliza(s: str) -> str:
     return (s or "").strip().lower()
 
 def cargar_base_local() -> Dict[str, str]:
-    """
-    Carga usuarios desde data/usuarios.json (si existe). Si no, usa USUARIOS_EMBEBIDOS.
-    Claves y valores en minúscula para comparación robusta.
-    """
     if USUARIOS_JSON.exists():
         try:
             raw = json.loads(USUARIOS_JSON.read_text(encoding="utf-8"))
@@ -164,7 +149,7 @@ def esta_en_prelanzamiento() -> tuple[bool, str]:
     return (False, "")
 
 # =========================
-# MENÚS / UI
+# UI / MENÚS
 # =========================
 def principal_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -187,9 +172,8 @@ def exness_inline() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
     ])
 
-BTN_CERRAR = "❌ Cerrar menú"
-BTN_AGENDA = "📅 Agenda"  # si lo usas
 BTN_ENLACES = "🔗 Enlaces y Conexión"
+BTN_CERRAR = "❌ Cerrar menú"
 
 def bottom_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
@@ -220,13 +204,12 @@ async def ensure_auth(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Tup
 # DB (PostgreSQL)
 # =========================
 async def get_db_pool() -> AsyncConnectionPool:
-    """Crea/retorna el pool async de Postgres."""
     global DB_POOL
     if DB_POOL is None:
         if not DATABASE_URL:
             raise RuntimeError("Falta DATABASE_URL para conectarse a PostgreSQL.")
         DB_POOL = AsyncConnectionPool(DATABASE_URL, min_size=1, max_size=5)
-        await DB_POOL.open()  # abrir explícitamente para evitar warnings
+        await DB_POOL.open()
     return DB_POOL
 
 async def init_db():
@@ -287,9 +270,6 @@ async def persistir_validacion(user_id: int, nombre: str,
             """, (user_id, nombre, cedula, correo, credential_used))
 
 async def fetch_broadcast_user_ids() -> list[int]:
-    """
-    Devuelve los user_id de todos los usuarios validados (nombre no nulo).
-    """
     pool = await get_db_pool()
     async with pool.connection() as aconn:
         async with aconn.cursor() as cur:
@@ -301,20 +281,12 @@ async def fetch_broadcast_user_ids() -> list[int]:
 # HELPERS
 # =========================
 def buscar_en_base(clave: str) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
-    """
-    Recibe cédula o correo. Si existe en BASE_LOCAL:
-      - obtiene el nombre
-      - busca (para ese nombre) su cédula y correo (si están)
-    Devuelve: (nombre, cedula, correo) o None si no existe.
-    """
     c = normaliza(clave)
     nombre = BASE_LOCAL.get(c)
     if not nombre:
         return None
-
     cedula_detectada = c if es_cedula(c) else None
     correo_detectado = c if es_correo(c) else None
-
     for k, v in BASE_LOCAL.items():
         if v != nombre:
             continue
@@ -376,16 +348,14 @@ async def envia_documento(upd_or_q, context: ContextTypes.DEFAULT_TYPE, ruta: Pa
             return
 
 # =========================
-# HANDLERS BÁSICOS
+# HANDLERS
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
-
     en_pre, msg = esta_en_prelanzamiento()
     if en_pre:
         await update.message.reply_text(msg)
         return
-
     await update.message.reply_text(
         f"👋 Hola, este es el bot del {NOMBRE_EVENTO}.\n\n"
         "Por favor escribe tu **cédula** o **correo registrado** para validar tu acceso:",
@@ -426,7 +396,6 @@ async def menu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
-
     en_pre, msg = esta_en_prelanzamiento()
     if en_pre:
         await update.message.reply_text(msg)
@@ -452,7 +421,7 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Estás autenticado. Usa el menú:", reply_markup=principal_inline())
         return
 
-    # No autenticado -> validar credencial en base local (JSON/embebida)
+    # Validar contra base local (JSON/embebida)
     clave = normaliza(texto)
     if not clave:
         await update.message.reply_text("❗ Por favor escribe tu **cédula** o **correo**.")
@@ -484,13 +453,10 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
-# =========================
-# ADMIN BROADCAST
-# =========================
+# ======= BROADCAST (solo admins / destinatarios desde Postgres)
 BROADCAST_WAITING = 1
 
 async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Entrypoint por botón inline."""
     query = update.callback_query
     await query.answer()
     await upsert_user_seen(query.from_user)
@@ -509,7 +475,6 @@ async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return BROADCAST_WAITING
 
 async def broadcast_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Entrypoint por comando /broadcast."""
     await upsert_user_seen(update.effective_user)
     uid = update.effective_user.id
     if uid not in ADMINS:
@@ -525,7 +490,7 @@ async def broadcast_start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     return BROADCAST_WAITING
 
 async def broadcast_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Copia el mensaje del admin a cada destinatario validado en Postgres."""
+    print("[broadcast] mensaje recibido en estado BROADCAST_WAITING")
     await upsert_user_seen(update.effective_user)
     uid = update.effective_user.id
     if uid not in ADMINS:
@@ -533,9 +498,7 @@ async def broadcast_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     targets = await fetch_broadcast_user_ids()
     if not targets:
-        await update.message.reply_text(
-            "⚠️ Aún no hay usuarios validados en la base de datos."
-        )
+        await update.message.reply_text("⚠️ Aún no hay usuarios validados en la base de datos.")
         await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
         return ConversationHandler.END
 
@@ -610,32 +573,40 @@ def build_app() -> Application:
         raise RuntimeError("Falta la variable de entorno BOT_TOKEN.")
 
     async def _post_init(app: Application):
-        # Crear tablas y recargar base local por si actualizas usuarios.json
         await init_db()
         global BASE_LOCAL
         BASE_LOCAL = cargar_base_local()
 
     app = Application.builder().token(BOT_TOKEN).post_init(_post_init).build()
 
-    # Conversación de broadcast (antes del CallbackQueryHandler general)
-    app.add_handler(ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(broadcast_start_cb, pattern="^admin_broadcast$"),
-            CommandHandler("broadcast", broadcast_start_cmd),
-        ],
-        states={BROADCAST_WAITING: [MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_receive)]},
-        fallbacks=[CommandHandler("cancel", broadcast_cancel)],
-        allow_reentry=True,
-        per_message=True,  # ← clave para flujos iniciados por callback
-    ))
+    # ---- Conversación de broadcast (grupo 0) ----
+    app.add_handler(
+        ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(broadcast_start_cb, pattern="^admin_broadcast$"),
+                CommandHandler("broadcast", broadcast_start_cmd),
+            ],
+            states={
+                BROADCAST_WAITING: [
+                    # BLOQUEA para que no pase al handler general
+                    MessageHandler(filters.ALL & ~filters.COMMAND, broadcast_receive, block=True)
+                ]
+            },
+            fallbacks=[CommandHandler("cancel", broadcast_cancel)],
+            allow_reentry=True,
+            per_message=True,   # necesario si el entrypoint es callback
+        ),
+        group=0,
+    )
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_cmd))
-    app.add_handler(CommandHandler("menu", menu_cmd))
-    app.add_handler(CommandHandler("miid", miid_cmd))
+    # ---- Handlers normales (grupo 1) ----
+    app.add_handler(CommandHandler("start", start), group=1)
+    app.add_handler(CommandHandler("help", help_cmd), group=1)
+    app.add_handler(CommandHandler("menu", menu_cmd), group=1)
+    app.add_handler(CommandHandler("miid", miid_cmd), group=1)
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ingreso_o_menu))
-    app.add_handler(CallbackQueryHandler(menu_callbacks))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ingreso_o_menu), group=1)
+    app.add_handler(CallbackQueryHandler(menu_callbacks), group=1)
 
     return app
 
@@ -644,7 +615,6 @@ if __name__ == "__main__":
     application = build_app()
 
     if USE_WEBHOOK and WEBHOOK_URL:
-        # Asegúrate que WEBHOOK_HOST tenga https://
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
@@ -652,5 +622,5 @@ if __name__ == "__main__":
             webhook_url=WEBHOOK_URL,
         )
     else:
-        print("Iniciando en modo polling. Establece USE_WEBHOOK=true y WEBHOOK_HOST=https://<...> para producción.")
+        print("Iniciando en modo polling. Establece USE_WEBHOOK=true y WEBHOOK_HOST=https://<...> para prod.")
         application.run_polling(drop_pending_updates=True)
