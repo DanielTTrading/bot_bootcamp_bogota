@@ -85,7 +85,7 @@ DOCS_DIR = DATA_DIR / "docs"
 VIDEOS_DIR = DATA_DIR / "videos"
 
 UBICACION_URL = "https://maps.app.goo.gl/zZfR7kPo9ZR1AUtu9"
-EXNESS_ACCOUNT_URL = "https://one.exnesstrack.org/a/s3wj0b5qry"
+EXNESS_ACCOUNT_URL = "https://one.exnessonelink.com/a/s3wj0b5qry"
 EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
 
 # =========================
@@ -154,7 +154,7 @@ def principal_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📚 Material de apoyo", callback_data="menu_material")],
         [InlineKeyboardButton("🔗 Enlaces y Conexión", callback_data="menu_enlaces")],
-        [InlineKeyboardButton("💳 Exness & Copy", callback_data="menu_exness")],
+        [InlineKeyboardButton("💳 Exness cuenta demo", callback_data="menu_exness")],
         [InlineKeyboardButton("📣 Enviar mensaje (Admin)", callback_data="admin_broadcast")],
     ])
 
@@ -167,7 +167,7 @@ def enlaces_inline_general() -> InlineKeyboardMarkup:
 def exness_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Crear cuenta en Exness", url=EXNESS_ACCOUNT_URL)],
-        [InlineKeyboardButton("🤝 Conectar al Copy JP TACTICAL", url=EXNESS_COPY_URL)],
+        #[InlineKeyboardButton("🤝 Conectar al Copy JP TACTICAL", url=EXNESS_COPY_URL)],
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
     ])
 
@@ -565,9 +565,9 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_exness":
         texto = (
-            "💳 *Apertura de cuenta y Copy Trading*\n\n"
+            "💳 *Apertura de cuenta demo*\n\n"
             "1) Primero crea y **verifica** tu cuenta en Exness.\n"
-            "2) Luego conéctate a nuestro **Copy JP TACTICAL**.\n\n"
+            "2) Empieza a disfrutar de exness.\n\n"
             "Usa los botones de abajo 👇"
         )
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=exness_inline())
