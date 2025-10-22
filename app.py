@@ -84,7 +84,7 @@ AGENDA_PDF = DATA_DIR / "agenda.pdf"
 DOCS_DIR = DATA_DIR / "docs"
 VIDEOS_DIR = DATA_DIR / "videos"
 
-UBICACION_URL = "https://maps.app.goo.gl/zZfR7kPo9ZR1AUtu9"
+UBICACION_URL = "https://maps.app.goo.gl/GS2k9sL38zchErH89"
 EXNESS_ACCOUNT_URL = "https://one.exnessonelink.com/a/s3wj0b5qry"
 EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
 
@@ -567,7 +567,7 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = (
             "💳 *Apertura de cuenta demo*\n\n"
             "1) Primero crea y **verifica** tu cuenta en Exness.\n"
-            "2) Empieza a disfrutar de exness.\n\n"
+            "2) Empieza a disfrutar de Exness.\n\n"
             "Usa los botones de abajo 👇"
         )
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=exness_inline())
