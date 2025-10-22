@@ -66,7 +66,7 @@ ADMINS: set[int] = {
 # =========================
 # TEXTOS / RECURSOS
 # =========================
-NOMBRE_EVENTO = "Bootcamp 2025 - 2 de JP Tactical Trading"
+NOMBRE_EVENTO = "Bootcamp 2025 Bogotá"
 BIENVENIDA = (
     f"🎉 ¡Bienvenido/a al {NOMBRE_EVENTO}! 🎉\n\n"
     "Has sido validado correctamente.\n"
