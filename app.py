@@ -166,7 +166,7 @@ def esta_en_prelanzamiento() -> tuple[bool, str]:
 # =========================
 PRESENTADORES = [
     ("p1", "Juan Pablo Vieira"),
-    #("p2", "Juan José Puerta"),
+    ("p2", "Andrés Durán"),
     ("p3", "Carlos Andrés Pérez"),
     ("p4", "Jorge Mario Rubio"),
     ("p5", "Jair Viana"),
@@ -211,15 +211,23 @@ VIDEO_LINKS: Dict[str, Dict[str, str]] = {
 ENLACES_POR_PRESENTADOR: Dict[str, Dict[str, str]] = {
     "p1": {"Web": "https://ttrading.co", "YouTube": "https://www.youtube.com/@JPTacticalTrading"},
     "p2": {
-        "FRED": "https://fred.stlouisfed.org/",
-        "MACRO TRENDS": "https://www.macrotrends.net/",
-        "MORNINGSTAR": "https://www.morningstar.com/",
-        "Web": "https://ttrading.co",
-        "YouTube": "https://www.youtube.com/@JPTacticalTrading",
+        "Instagram Andrés Durán": "https://www.instagram.com/duranwealth?igsh=aTdjYzQ5eGdtanI=",
+        # "FRED": "https://fred.stlouisfed.org/",
+        # "MACRO TRENDS": "https://www.macrotrends.net/",
+        # "MORNINGSTAR": "https://www.morningstar.com/",
+        # "Web": "https://ttrading.co",
+        # "YouTube": "https://www.youtube.com/@JPTacticalTrading",
     },
     "p3": {"Web": "https://ttrading.co", "YouTube": "https://www.youtube.com/@JPTacticalTrading"},
-    "p4": {},
-    "p5": {},
+    "p4": {
+        "Contactanos": "wa.me/message/KMRACEVS2P6GJ1",
+        "Instagram Ps. Jorge Mario Rubio": "https://www.instagram.com/tupsicologoencasa?igsh=eThhdW9lamNxMmIy",
+    },
+    "p5": {
+        "Instagram Libertank": "https://www.instagram.com/libertank?igsh=MTV2aXVtd3JydGxuZA==",
+        "Instagram Jair Viana": "https://www.instagram.com/jair.viana/",
+        "Web": "https://www.instagram.com/libertank?igsh=MTV2aXVtd3JydGxuZA==",
+    },
 }
 
 # =========================
