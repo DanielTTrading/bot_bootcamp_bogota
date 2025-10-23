@@ -97,6 +97,11 @@ UBICACION_URL = "https://maps.app.goo.gl/GS2k9sL38zchErH89"
 EXNESS_ACCOUNT_URL = "https://one.exnessonelink.com/a/s3wj0b5qry"
 EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
 
+ENLACES_CONEXION: Dict[str, str] = {
+    "Bootcamp Día 1": "https://us06web.zoom.us/j/85908132642?pwd=ItdvVDASOYRilJHB43c2Naz0eS76XJ.1",
+    "Bootcamp Día 2": "https://us06web.zoom.us/j/84348314641?pwd=ymlDnmB2Cw2s2vGcNbIrFVdEnMRIXg.1",
+}
+
 # =========================
 # BASE LOCAL (JSON o embebida)
 # =========================
@@ -161,7 +166,7 @@ def esta_en_prelanzamiento() -> tuple[bool, str]:
 # =========================
 PRESENTADORES = [
     ("p1", "Juan Pablo Vieira"),
-    ("p2", "Juan José Puerta"),
+    #("p2", "Juan José Puerta"),
     ("p3", "Carlos Andrés Pérez"),
     ("p4", "Jorge Mario Rubio"),
     ("p5", "Jair Viana"),
@@ -222,13 +227,15 @@ ENLACES_POR_PRESENTADOR: Dict[str, Dict[str, str]] = {
 # =========================
 def principal_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📅 Agenda", callback_data="menu_agenda")],
         [InlineKeyboardButton("📚 Material de apoyo", callback_data="menu_material")],
-        [InlineKeyboardButton("💳 Exness cuenta demo", callback_data="menu_exness")],
+        [InlineKeyboardButton("💳 Exness Cuenta Demo", callback_data="menu_exness")],
         [InlineKeyboardButton("📍 Ubicación", callback_data="menu_ubicacion")],
         [InlineKeyboardButton("📶 Conexión Wi-Fi", callback_data="menu_wifi")],
         [InlineKeyboardButton("🔗 Enlaces y Conexión", callback_data="menu_enlaces")],
         [InlineKeyboardButton("📣 Enviar mensaje (Admin)", callback_data="admin_broadcast")],
     ])
+
 
 def presentadores_keyboard(prefix: str) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(nombre, callback_data=f"{prefix}:{pid}")] for pid, nombre in PRESENTADORES]
@@ -258,9 +265,11 @@ def lista_video_links_inline(pid: str) -> InlineKeyboardMarkup:
 
 def enlaces_inline_general() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🧩 Conexiones del evento (Zoom)", callback_data="enlaces_conexion")],
         [InlineKeyboardButton("⭐ Enlaces por presentador", callback_data="enlaces_por_presentador")],
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
     ])
+
 
 def enlaces_presentador_lista(pid: str) -> InlineKeyboardMarkup:
     enlaces = ENLACES_POR_PRESENTADOR.get(pid, {})
@@ -667,6 +676,40 @@ async def accion_wifi(upd_or_q, context: ContextTypes.DEFAULT_TYPE):
         q = upd_or_q
         await q.edit_message_text(WIFI_MSG, parse_mode="Markdown", reply_markup=wifi_inline())
 
+async def accion_agenda(upd_or_q, context: ContextTypes.DEFAULT_TYPE):
+    """Envía el PDF de la agenda si existe; de lo contrario, muestra un texto."""
+    texto_header = "📅 Agenda del evento"
+    if isinstance(upd_or_q, Update):
+        message = upd_or_q.message
+        edit = None
+    else:
+        q = upd_or_q
+        message = q.message
+        edit = q.edit_message_text
+
+    if AGENDA_PDF.exists():
+        if edit:
+            await edit(f"{texto_header} (PDF disponible para descargar).")
+        else:
+            await message.reply_text(f"{texto_header} (PDF disponible para descargar).")
+        await envia_documento(upd_or_q, context, AGENDA_PDF, "Agenda del evento")
+        return
+
+    # Fallback si no subiste data/agenda.pdf
+    texto = (
+        "📅 *Agenda del evento*\n"
+        "- Día 1: Introducción y Setup\n"
+        "- Día 2: Estrategias y Práctica\n"
+        "- Horario: 7:00 pm - 9:00 pm (Hora Colombia)\n\n"
+        "_(Puedes subir un PDF como `data/agenda.pdf` para compartirlo automáticamente.)_"
+    )
+    if edit:
+        await edit(texto, parse_mode="Markdown", reply_markup=principal_inline())
+    else:
+        await message.reply_text(texto, parse_mode="Markdown", reply_markup=principal_inline())
+
+
+
 async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -687,6 +730,12 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "volver_menu_principal":
         await query.edit_message_text("Menú principal:", reply_markup=principal_inline())
         return
+
+
+    if data == "menu_agenda":
+        await accion_agenda(query, context)
+        return
+
 
     # Material de apoyo
     if data == "menu_material":
@@ -747,10 +796,19 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       parse_mode="Markdown")
         return
 
-    if data == "enlaces_por_presentador":
-        await query.edit_message_text("⭐ Elige un presentador:",
-                                      reply_markup=presentadores_keyboard("link_pres"))
+    if data == "enlaces_conexion":
+        if not ENLACES_CONEXION:
+            await query.edit_message_text("🧩 Conexiones del evento:\n\n(Pronto publicaremos los enlaces)",
+                                          parse_mode="Markdown",
+                                          reply_markup=enlaces_inline_general())
+            return
+        rows = [[InlineKeyboardButton(nombre, url=url)] for nombre, url in ENLACES_CONEXION.items()]
+        rows.append([InlineKeyboardButton("⬅️ Volver", callback_data="menu_enlaces")])
+        await query.edit_message_text("🧩 *Conexiones del evento (Zoom):*",
+                                      parse_mode="Markdown",
+                                      reply_markup=InlineKeyboardMarkup(rows))
         return
+
 
     if data.startswith("link_pres:"):
         pid = data.split(":", 1)[1]
