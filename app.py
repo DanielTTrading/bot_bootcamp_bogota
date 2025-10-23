@@ -816,6 +816,15 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       parse_mode="Markdown",
                                       reply_markup=InlineKeyboardMarkup(rows))
         return
+    
+        # Enlaces por presentador (mostrar lista de presentadores)
+    if data == "enlaces_por_presentador":
+        await query.edit_message_text(
+            "⭐ *Elige un presentador:*",
+            reply_markup=presentadores_keyboard("link_pres"),
+            parse_mode="Markdown",
+        )
+        return
 
 
     if data.startswith("link_pres:"):
