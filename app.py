@@ -52,7 +52,13 @@ PRELAUNCH_MESSAGE = os.getenv(
     "⏳ Vuelve pronto y usa /start para comenzar. 🙌"
 )
 
+# WIFI
 WIFI_SSID = os.getenv("WIFI_SSID", "NombreDeRed")
+WIFI_MSG = os.getenv(
+    "WIFI_MESSAGE",
+    "📶 *Wi-Fi del evento*\n\n• **Nombre de red (SSID):** `{ssid}`\n"
+    "• *La red es abierta (no necesita clave).*"
+).replace("{ssid}", WIFI_SSID)
 
 # --- ADMINS (incluye el nuevo 7724870185) ---
 ADMINS: set[int] = {
@@ -82,8 +88,11 @@ DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 AGENDA_PDF = DATA_DIR / "agenda.pdf"
 DOCS_DIR = DATA_DIR / "docs"
+DOCS_DIR.mkdir(parents=True, exist_ok=True)
 VIDEOS_DIR = DATA_DIR / "videos"
+VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Ubicación y Exness
 UBICACION_URL = "https://maps.app.goo.gl/GS2k9sL38zchErH89"
 EXNESS_ACCOUNT_URL = "https://one.exnessonelink.com/a/s3wj0b5qry"
 EXNESS_COPY_URL = "https://social-trading.exness.com/strategy/227834645/a/s3wj0b5qry?sharer=trader"
@@ -148,26 +157,132 @@ def esta_en_prelanzamiento() -> tuple[bool, str]:
     return (False, "")
 
 # =========================
+# MATERIAL DE APOYO (igual al primero)
+# =========================
+PRESENTADORES = [
+    ("p1", "Juan Pablo Vieira"),
+    ("p2", "Juan José Puerta"),
+    ("p3", "Carlos Andrés Pérez"),
+    ("p4", "Jorge Mario Rubio"),
+    ("p5", "Jair Viana"),
+]
+
+# Estructura: MATERIALES[pid]["docs"][nombre] = Path(...)
+MATERIALES: Dict[str, Dict[str, Dict[str, Path]]] = {
+    "p1": {"videos": {}, "docs": {}},
+    "p2": {"videos": {}, "docs": {}},
+    "p3": {"videos": {}, "docs": {}},
+    "p4": {"videos": {}, "docs": {}},
+    "p5": {"videos": {}, "docs": {}},
+}
+# Ejemplo: agrega aquí tus archivos (debe existir el fichero en data/docs/)
+# MATERIALES["p2"]["docs"]["VALORACIÓN RAPIDA JP TACTICAL"] = DOCS_DIR / "VALORACIÓN RAPIDA JP TACTICAL.xlsx"
+# MATERIALES["p2"]["docs"]["VALORACIÓN RAPIDA JP TACTICAL DIDACTICA"] = DOCS_DIR / "VALORACIÓN RAPIDA- DIDACTICA-2.xlsx"
+
+# Videos por presentador (URLs)
+VIDEO_LINKS: Dict[str, Dict[str, str]] = {
+    "p1": {
+        "Crear Cuenta en Interactive Brokers": "https://drive.google.com/file/d/1thOot6PZdxLgutH3c3JuCrIwXwRGcxeb/view?usp=sharing",
+        "Crear Cuenta en TRII": "https://drive.google.com/file/d/1thOot6PZdxLgutH3c3JuCrIwXwRGcxeb/view?usp=sharing",
+    },
+    "p2": {
+        "DATOS DE EMPRESAS Y MACRO": "https://drive.google.com/file/d/1S-LncN3dd3eYBBCO_YgYuv5n6d2DSGAM/view?usp=sharing",
+        "DATOS DE EMPRESAS": "https://drive.google.com/file/d/1Yo1CxNipafXdbcoXK6ahpGgaHdJqdbzj/view?usp=sharing",
+        "FRED": "https://drive.google.com/file/d/12SRmvSbdhrS0qeM4dFE1EMSkScH4hKcL/view?usp=sharing",
+        "HERRAMIENTA D.O.O.R": "https://drive.google.com/file/d/1zwejfDpdC7Z0CVsCb4t0UqQD0yqdPBBe/view?usp=sharing",
+        "MORNINGSTAR": "https://drive.google.com/file/d/1POiz8YG7xYZpjxaBZ7YiZqmI7RpCQgLa/view?usp=sharing",
+        "MOVIMIENTOS DE SENADORES USA": "https://drive.google.com/file/d/1zGIZWRRs3EiMAv-i9DDe5N57XxYWkqx5/view?usp=sharing",
+        "PAGINA MORDOR INTELLIGENCE": "https://drive.google.com/file/d/17HMRzdBHknyxLeoB7JA0V9h-gtQrgZX4/view?usp=sharing",
+        "PORTAFOLIO GRANDES INVERSORES": "https://drive.google.com/file/d/1-qcP4LNAlCaqajgepQYcREC8fdzwpgY-/view?usp=sharing",
+        "SCREENER, MAPS Y DATOS": "https://drive.google.com/file/d/1Mn_SmvqXEijzAOPoNtsnoW3mWksqPdTl/view?usp=sharing",
+        "SEC": "https://drive.google.com/file/d/1OwIZ_Bk94RHjQZf0zmxtlH38frrxzb70/view?usp=sharing",
+        "VALORACIÓN COMPAÑIA": "https://drive.google.com/file/d/1mqG03xZB8urE7_VA1a8YcRO4nalxnSWD/view?usp=sharing",
+    },
+    "p3": {},
+    "p4": {},
+    "p5": {},
+}
+
+ENLACES_POR_PRESENTADOR: Dict[str, Dict[str, str]] = {
+    "p1": {"Web": "https://ttrading.co", "YouTube": "https://www.youtube.com/@JPTacticalTrading"},
+    "p2": {
+        "FRED": "https://fred.stlouisfed.org/",
+        "MACRO TRENDS": "https://www.macrotrends.net/",
+        "MORNINGSTAR": "https://www.morningstar.com/",
+        "Web": "https://ttrading.co",
+        "YouTube": "https://www.youtube.com/@JPTacticalTrading",
+    },
+    "p3": {"Web": "https://ttrading.co", "YouTube": "https://www.youtube.com/@JPTacticalTrading"},
+    "p4": {},
+    "p5": {},
+}
+
+# =========================
 # UI / MENÚS
 # =========================
 def principal_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📚 Material de apoyo", callback_data="menu_material")],
-        [InlineKeyboardButton("🔗 Enlaces y Conexión", callback_data="menu_enlaces")],
         [InlineKeyboardButton("💳 Exness cuenta demo", callback_data="menu_exness")],
+        [InlineKeyboardButton("📍 Ubicación", callback_data="menu_ubicacion")],
+        [InlineKeyboardButton("📶 Conexión Wi-Fi", callback_data="menu_wifi")],
+        [InlineKeyboardButton("🔗 Enlaces y Conexión", callback_data="menu_enlaces")],
         [InlineKeyboardButton("📣 Enviar mensaje (Admin)", callback_data="admin_broadcast")],
     ])
 
+def presentadores_keyboard(prefix: str) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(nombre, callback_data=f"{prefix}:{pid}")] for pid, nombre in PRESENTADORES]
+    rows.append([InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")])
+    return InlineKeyboardMarkup(rows)
+
+def material_presentador_menu(pid: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎥 Videos", callback_data=f"mat_videos_url:{pid}")],
+        [InlineKeyboardButton("📄 Documentos", callback_data=f"mat_docs:{pid}")],
+        [InlineKeyboardButton("⬅️ Elegir otro presentador", callback_data="menu_material")],
+        [InlineKeyboardButton("🏠 Menú principal", callback_data="volver_menu_principal")],
+    ])
+
+def lista_archivos_inline(diccionario: Dict[str, Path], prefix: str, pid: str) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(nombre, callback_data=f"{prefix}:{pid}:{nombre}")]
+            for nombre in diccionario.keys()]
+    rows.append([InlineKeyboardButton("⬅️ Volver", callback_data=f"mat_pres:{pid}")])
+    return InlineKeyboardMarkup(rows)
+
+def lista_video_links_inline(pid: str) -> InlineKeyboardMarkup:
+    enlaces = VIDEO_LINKS.get(pid, {})
+    rows = [[InlineKeyboardButton(nombre, url=url)] for nombre, url in enlaces.items()]
+    rows.append([InlineKeyboardButton("⬅️ Volver", callback_data=f"mat_pres:{pid}")])
+    rows.append([InlineKeyboardButton("🏠 Menú principal", callback_data="volver_menu_principal")])
+    return InlineKeyboardMarkup(rows)
+
 def enlaces_inline_general() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📍 Abrir ubicación", url=UBICACION_URL)],
+        [InlineKeyboardButton("⭐ Enlaces por presentador", callback_data="enlaces_por_presentador")],
+        [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
+    ])
+
+def enlaces_presentador_lista(pid: str) -> InlineKeyboardMarkup:
+    enlaces = ENLACES_POR_PRESENTADOR.get(pid, {})
+    rows = [[InlineKeyboardButton(nombre, url=url)] for nombre, url in enlaces.items()]
+    rows.append([InlineKeyboardButton("⬅️ Elegir otro presentador", callback_data="enlaces_por_presentador")])
+    rows.append([InlineKeyboardButton("🏠 Menú principal", callback_data="volver_menu_principal")])
+    return InlineKeyboardMarkup(rows)
+
+def ubicacion_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📍 Abrir en Google Maps", url=UBICACION_URL)],
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
     ])
 
 def exness_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Crear cuenta en Exness", url=EXNESS_ACCOUNT_URL)],
-        #[InlineKeyboardButton("🤝 Conectar al Copy JP TACTICAL", url=EXNESS_COPY_URL)],
+        [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
+    ])
+
+def wifi_inline() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("⬅️ Volver", callback_data="volver_menu_principal")],
     ])
 
@@ -347,7 +462,7 @@ async def envia_documento(upd_or_q, context: ContextTypes.DEFAULT_TYPE, ruta: Pa
             return
 
 # =========================
-# HANDLERS
+# HANDLERS BÁSICOS
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
@@ -393,7 +508,9 @@ async def menu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
-# --- BROADCAST por bandera en user_data ---
+# =========================
+# BROADCAST ADMIN
+# =========================
 async def broadcast_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -430,14 +547,12 @@ async def broadcast_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
 async def intentar_broadcast_si_corresponde(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Si el usuario es admin y está en modo broadcast, reenvía y retorna True (manejado)."""
     uid = update.effective_user.id if update.effective_user else 0
     if uid not in ADMINS:
         return False
     if not context.user_data.get("bcast"):
         return False
 
-    # salimos del modo broadcast
     context.user_data["bcast"] = False
 
     targets = await fetch_broadcast_user_ids()
@@ -463,6 +578,9 @@ async def intentar_broadcast_si_corresponde(update: Update, context: ContextType
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
     return True
 
+# =========================
+# ACCIONES / MENÚ TEXTO
+# =========================
 async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
 
@@ -529,8 +647,26 @@ async def text_ingreso_o_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text("Menú principal:", reply_markup=principal_inline())
 
 # =========================
-# CALLBACKS MENÚ
+# CALLBACKS MENÚ (incluye Material, Ubicación y Wi-Fi)
 # =========================
+async def accion_ubicacion(upd_or_q, context: ContextTypes.DEFAULT_TYPE):
+    if isinstance(upd_or_q, Update):
+        msg = upd_or_q.message
+        await msg.reply_text("📍 *Ubicación del evento*\nToca el botón para abrir en Google Maps.",
+                             parse_mode="Markdown", reply_markup=ubicacion_inline())
+    else:
+        q = upd_or_q
+        await q.edit_message_text("📍 *Ubicación del evento*\nToca el botón para abrir en Google Maps.",
+                                  parse_mode="Markdown", reply_markup=ubicacion_inline())
+
+async def accion_wifi(upd_or_q, context: ContextTypes.DEFAULT_TYPE):
+    if isinstance(upd_or_q, Update):
+        msg = upd_or_q.message
+        await msg.reply_text(WIFI_MSG, parse_mode="Markdown", reply_markup=wifi_inline())
+    else:
+        q = upd_or_q
+        await q.edit_message_text(WIFI_MSG, parse_mode="Markdown", reply_markup=wifi_inline())
+
 async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -552,17 +688,96 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Menú principal:", reply_markup=principal_inline())
         return
 
+    # Material de apoyo
+    if data == "menu_material":
+        await query.edit_message_text(
+            "📚 *Material de apoyo*\nElige un presentador:",
+            reply_markup=presentadores_keyboard("mat_pres"),
+            parse_mode="Markdown",
+        )
+        return
+
+    if data.startswith("mat_pres:"):
+        pid = data.split(":", 1)[1]
+        nombre = next((n for (i, n) in PRESENTADORES if i == pid), "Presentador")
+        await query.edit_message_text(
+            f"📚 *Material de {nombre}*",
+            reply_markup=material_presentador_menu(pid),
+            parse_mode="Markdown",
+        )
+        return
+
+    if data.startswith("mat_videos_url:"):
+        pid = data.split(":", 1)[1]
+        enlaces = VIDEO_LINKS.get(pid, {})
+        if not enlaces:
+            await query.edit_message_text("🎥 No hay videos por ahora.",
+                                          reply_markup=material_presentador_menu(pid))
+        else:
+            await query.edit_message_text("🎥 *Videos:*",
+                                          reply_markup=lista_video_links_inline(pid),
+                                          parse_mode="Markdown")
+        return
+
+    if data.startswith("mat_docs:"):
+        pid = data.split(":", 1)[1]
+        docs = MATERIALES.get(pid, {}).get("docs", {})
+        if not docs:
+            await query.edit_message_text("📄 No hay documentos disponibles por ahora.",
+                                          reply_markup=material_presentador_menu(pid))
+        else:
+            await query.edit_message_text("📄 *Documentos:*",
+                                          reply_markup=lista_archivos_inline(docs, "doc", pid),
+                                          parse_mode="Markdown")
+        return
+
+    if data.startswith("doc:"):
+        _, pid, titulo = data.split(":", 2)
+        ruta = MATERIALES.get(pid, {}).get("docs", {}).get(titulo)
+        if ruta:
+            await envia_documento(update, context, ruta, titulo)
+        else:
+            await query.message.reply_text("No se encontró el documento solicitado.")
+        return
+
+    # Enlaces generales
     if data == "menu_enlaces":
         await query.edit_message_text("🔗 *Enlaces y Conexión*",
                                       reply_markup=enlaces_inline_general(),
                                       parse_mode="Markdown")
         return
 
-    if data == "admin_broadcast":
-        # lo maneja broadcast_start_cb; este fallback es por si llega aquí
-        await broadcast_start_cb(update, context)
+    if data == "enlaces_por_presentador":
+        await query.edit_message_text("⭐ Elige un presentador:",
+                                      reply_markup=presentadores_keyboard("link_pres"))
         return
 
+    if data.startswith("link_pres:"):
+        pid = data.split(":", 1)[1]
+        nombre = next((n for (i, n) in PRESENTADORES if i == pid), "Presentador")
+        enlaces = ENLACES_POR_PRESENTADOR.get(pid, {})
+        if not enlaces:
+            await query.edit_message_text(
+                f"⭐ *Enlaces de {nombre}*\n(No hay enlaces por ahora.)",
+                reply_markup=enlaces_presentador_lista(pid),
+                parse_mode="Markdown")
+        else:
+            await query.edit_message_text(
+                f"⭐ *Enlaces de {nombre}*:",
+                reply_markup=enlaces_presentador_lista(pid),
+                parse_mode="Markdown")
+        return
+
+    # Ubicación y Wi-Fi
+    if data == "menu_ubicacion":
+        await accion_ubicacion(query, context)
+        return
+
+    if data == "menu_wifi":
+        await accion_wifi(query, context)
+        return
+
+    # Exness
     if data == "menu_exness":
         texto = (
             "💳 *Apertura de cuenta demo*\n\n"
@@ -571,6 +786,11 @@ async def menu_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Usa los botones de abajo 👇"
         )
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=exness_inline())
+        return
+
+    # Broadcast (por si cae aquí)
+    if data == "admin_broadcast":
+        await broadcast_start_cb(update, context)
         return
 
 # =========================
