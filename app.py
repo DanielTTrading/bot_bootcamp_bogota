@@ -53,7 +53,7 @@ PRELAUNCH_MESSAGE = os.getenv(
 )
 
 # WIFI
-WIFI_SSID = os.getenv("WIFI_SSID", "NombreDeRed")
+WIFI_SSID = os.getenv("WIFI_SSID", "Club_Nogal")
 WIFI_MSG = os.getenv(
     "WIFI_MESSAGE",
     "📶 *Wi-Fi del evento*\n\n• **Nombre de red (SSID):** `{ssid}`\n"
