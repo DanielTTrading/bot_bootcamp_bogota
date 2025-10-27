@@ -516,6 +516,13 @@ async def miid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Si eres admin, asegúrate de que tu ID esté en la lista ADMINS.",
         parse_mode="Markdown"
     )
+# --- NUEVO: handler que captura medios (no texto) y ejecuta broadcast si está activo
+async def maybe_broadcast_any(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Si estás en modo broadcast, envía este mensaje a todos y termina
+    if await intentar_broadcast_si_corresponde(update, context):
+        return
+    # Si no hay broadcast activo, no hacemos nada aquí
+
 
 async def menu_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await upsert_user_seen(update.effective_user)
@@ -893,6 +900,8 @@ def build_app() -> Application:
     app.add_handler(CommandHandler("cancel", broadcast_cancel))
     app.add_handler(CallbackQueryHandler(broadcast_start_cb, pattern="^admin_broadcast$"))
 
+    # Broadcast de medios / no-texto (debe ir ANTES del handler de texto)
+    app.add_handler(MessageHandler((~filters.COMMAND) & (~filters.TEXT), maybe_broadcast_any))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_ingreso_o_menu))
     app.add_handler(CallbackQueryHandler(menu_callbacks))
 
